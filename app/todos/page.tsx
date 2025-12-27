@@ -5,14 +5,15 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { Header } from "@/components/header"
-import { type Task, getTasks, setTasks } from "@/lib/mock-db"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Trash2, Plus, Share2, Pencil, X, Check, CalendarDays, Sparkles } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { formatKoreanDate, isSameLocalDay } from "@/lib/utils"
+import { formatKoreanDate } from "@/lib/utils"
+import type { MorningTask, MorningTaskCategory } from "@/lib/morning/types"
+import { apiCreateTask, apiDeleteTask, apiListTodayTasks, apiShareTodayTasks, apiUpdateTask } from "@/lib/morning/api"
 
 const joyQuotes = [
   "Reset and ready with Joy. Tomorrow is another chance to shine.", // Sunday (0)
@@ -28,54 +29,47 @@ export default function TodosPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
   const { toast } = useToast()
-  const [tasks, setTasksState] = useState<Task[]>([])
+  const [tasks, setTasksState] = useState<MorningTask[]>([])
   const [newTaskContent, setNewTaskContent] = useState("")
-  const [newTaskCategory, setNewTaskCategory] = useState<Task["category"]>("learning")
+  const [newTaskCategory, setNewTaskCategory] = useState<MorningTaskCategory>("learning")
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const today = new Date()
   const todayQuote = joyQuotes[today.getDay()] ?? joyQuotes[0]
 
-  const loadTasks = () => {
-    const allTasks = getTasks()
-    const myTodayTasks = allTasks.filter((t) => t.userId === user?.id && isSameLocalDay(t.createdAt, today))
-    setTasksState(myTodayTasks)
+  const getTodayRangeIso = () => {
+    const start = new Date(today)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(today)
+    end.setHours(23, 59, 59, 999)
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+
+  const loadTasks = async () => {
+    if (!user) return
+    const range = getTodayRangeIso()
+    const data = await apiListTodayTasks(range)
+    setTasksState(data)
   }
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login")
     } else if (user) {
-      loadTasks()
+      void loadTasks()
     }
   }, [user, loading, router])
 
-  const addTask = () => {
+  const addTask = async () => {
     if (!user || !newTaskContent.trim()) return
 
-    const allTasks = getTasks()
-    const newTask: Task = {
-      id: Date.now().toString(),
-      userId: user.id,
-      userName: user.name,
-      content: newTaskContent.trim(),
-      category: newTaskCategory,
-      completed: false,
-      isShared: false,
-      createdAt: new Date().toISOString(),
-      likes: [],
-    }
-
-    setTasks([...allTasks, newTask])
+    await apiCreateTask({ content: newTaskContent.trim(), category: newTaskCategory, userName: user.name })
     setNewTaskContent("")
-    loadTasks()
+    await loadTasks()
 
-    toast({
-      title: "작업 추가됨",
-      description: "새로운 작업이 목록에 추가되었습니다.",
-    })
+    toast({ title: "작업 추가됨", description: "새로운 작업이 목록에 추가되었습니다." })
   }
 
-  const startEditTask = (task: Task) => {
+  const startEditTask = (task: MorningTask) => {
     setEditingTaskId(task.id)
     setNewTaskContent(task.content)
     setNewTaskCategory(task.category)
@@ -87,78 +81,40 @@ export default function TodosPage() {
     setNewTaskCategory("learning")
   }
 
-  const updateTask = () => {
+  const updateTask = async () => {
     if (!user || !editingTaskId || !newTaskContent.trim()) return
 
-    const allTasks = getTasks()
-    const idx = allTasks.findIndex((t) => t.id === editingTaskId)
-    if (idx === -1) return
-
-    const target = allTasks[idx]
-    if (target.userId !== user.id) return
-
-    allTasks[idx] = {
-      ...target,
-      content: newTaskContent.trim(),
-      category: newTaskCategory,
-    }
-
-    setTasks(allTasks)
+    await apiUpdateTask(editingTaskId, { content: newTaskContent.trim(), category: newTaskCategory })
     setEditingTaskId(null)
     setNewTaskContent("")
-    loadTasks()
+    await loadTasks()
 
-    toast({
-      title: "작업 수정됨",
-      description: "작업 내용이 업데이트되었습니다.",
-    })
+    toast({ title: "작업 수정됨", description: "작업 내용이 업데이트되었습니다." })
   }
 
-  const toggleTask = (taskId: string) => {
-    const allTasks = getTasks()
-    const updated = allTasks.map((t) =>
-      t.id === taskId
-        ? {
-            ...t,
-            completed: !t.completed,
-            completedAt: !t.completed ? new Date().toISOString() : undefined,
-          }
-        : t,
-    )
-    setTasks(updated)
-    loadTasks()
+  const toggleTask = async (taskId: string) => {
+    const current = tasks.find((t) => t.id === taskId)
+    if (!current) return
+    await apiUpdateTask(taskId, { completed: !current.completed })
+    await loadTasks()
   }
 
-  const deleteTask = (taskId: string) => {
-    const allTasks = getTasks()
-    const filtered = allTasks.filter((t) => t.id !== taskId)
-    setTasks(filtered)
-    loadTasks()
-
-    toast({
-      title: "작업 삭제됨",
-      description: "작업이 삭제되었습니다.",
-    })
+  const deleteTask = async (taskId: string) => {
+    await apiDeleteTask(taskId)
+    await loadTasks()
+    toast({ title: "작업 삭제됨", description: "작업이 삭제되었습니다." })
   }
 
-  const shareAllTasks = () => {
+  const shareAllTasks = async () => {
     if (!user) return
 
-    const allTasks = getTasks()
-    const updated = allTasks.map((t) =>
-      t.userId === user.id && isSameLocalDay(t.createdAt, today) ? { ...t, isShared: true } : t,
-    )
-    setTasks(updated)
-    loadTasks()
-
-    toast({
-      title: "작업 공유 완료!",
-      description: "모든 작업이 대시보드에 공유되었습니다.",
-    })
+    const range = getTodayRangeIso()
+    const res = await apiShareTodayTasks(range)
+    toast({ title: "작업 공유 완료!", description: `${res.updated}개의 작업이 대시보드에 공유되었습니다.` })
 
     setTimeout(() => {
       router.push("/dashboard")
-    }, 1000)
+    }, 600)
   }
 
   if (loading || !user) {
@@ -231,7 +187,7 @@ export default function TodosPage() {
               </div>
 
               <div className="flex gap-2 mb-6">
-                <Select value={newTaskCategory} onValueChange={(v) => setNewTaskCategory(v as Task["category"])}>
+                <Select value={newTaskCategory} onValueChange={(v) => setNewTaskCategory(v as MorningTaskCategory)}>
                   <SelectTrigger className="w-[140px]">
                     <SelectValue />
                   </SelectTrigger>

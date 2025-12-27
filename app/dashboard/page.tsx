@@ -5,25 +5,26 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { Header } from "@/components/header"
-import { type Feedback, type Task, addFeedback, addFeedbackComment, getFeedbacks, getTasks, getUsers } from "@/lib/mock-db"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, MessageCircle, RefreshCw, Send } from "lucide-react"
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Heart, MessageCircle, RefreshCw, Send } from "lucide-react"
 import { cn, isSameLocalDay } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
+import type { MorningFeedback, MorningTaskCategory, MorningTaskWithLikes } from "@/lib/morning/types"
+import { apiCreateFeedback, apiCreateFeedbackComment, apiListFeedbacks, apiListSharedTasksInRange, apiToggleTaskLike } from "@/lib/morning/api"
 
 export default function DashboardPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
   // 주간(월~일) 범위를 기준으로 로드한 공유 작업 목록
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [filter, setFilter] = useState<"all" | Task["category"]>("all")
+  const [tasks, setTasks] = useState<MorningTaskWithLikes[]>([])
+  const [filter, setFilter] = useState<"all" | MorningTaskCategory>("all")
   const [userFilter, setUserFilter] = useState<string>("all")
 
   // 피드백/댓글
-  const [feedbacks, setFeedbacksState] = useState<Feedback[]>([])
+  const [feedbacks, setFeedbacksState] = useState<MorningFeedback[]>([])
   const [feedbackDialogToUserId, setFeedbackDialogToUserId] = useState<string | null>(null)
   const [feedbackDraft, setFeedbackDraft] = useState("")
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
@@ -57,31 +58,43 @@ export default function DashboardPage() {
     return d >= start && d <= end
   }
 
-  const loadTasks = useCallback(() => {
-    const allTasks = getTasks()
-    const sharedTasksInWeek = allTasks.filter((t) => t.isShared && isWithinLocalRange(t.createdAt, weekStart, weekEnd))
-    setTasks(sharedTasksInWeek)
+  const loadTasks = useCallback(async () => {
+    const startIso = weekStart.toISOString()
+    const endIso = weekEnd.toISOString()
+    const shared = await apiListSharedTasksInRange({ start: startIso, end: endIso })
+    setTasks(shared)
   }, [weekStart, weekEnd])
 
-  const loadFeedbacks = useCallback(() => {
-    setFeedbacksState(getFeedbacks())
-  }, [])
+  const loadFeedbacks = useCallback(
+    async (toUserIds: string[]) => {
+      const startIso = weekStart.toISOString()
+      const endIso = weekEnd.toISOString()
+      const data = await apiListFeedbacks({ toUserIds, start: startIso, end: endIso })
+      setFeedbacksState(data)
+    },
+    [weekStart, weekEnd],
+  )
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login")
     } else if (user) {
-      loadTasks()
-      loadFeedbacks()
+      void loadTasks()
       const interval = setInterval(() => {
-        loadTasks()
-        loadFeedbacks()
+        void loadTasks()
       }, 5000)
       return () => clearInterval(interval)
     }
   }, [user, loading, router, loadTasks, loadFeedbacks])
 
-  const users = getUsers()
+  const users = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    for (const t of tasks) {
+      if (!map.has(t.userId)) map.set(t.userId, { id: t.userId, name: t.userName })
+    }
+    return Array.from(map.values())
+  }, [tasks])
+
   const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
   const feedbackToUserName = feedbackDialogToUserId ? userNameById.get(feedbackDialogToUserId) : undefined
   const isSelfFeedbackDialog = Boolean(user && feedbackDialogToUserId && feedbackDialogToUserId === user.id)
@@ -91,23 +104,23 @@ export default function DashboardPage() {
     setFeedbackDraft("")
   }
 
-  const submitFeedback = () => {
+  const submitFeedback = async () => {
     if (!user || !feedbackDialogToUserId) return
     const content = feedbackDraft.trim()
     if (!content) return
 
-    addFeedback({ toUserId: feedbackDialogToUserId, fromUserId: user.id, fromUserName: user.name, content })
-    loadFeedbacks()
+    await apiCreateFeedback({ toUserId: feedbackDialogToUserId, fromUserName: user.name, content })
+    await loadFeedbacks(users.map((u) => u.id))
     setFeedbackDraft("")
     setFeedbackDialogToUserId(null)
   }
 
-  const submitComment = (feedbackId: string) => {
+  const submitComment = async (feedbackId: string) => {
     if (!user) return
     const content = (commentDrafts[feedbackId] ?? "").trim()
     if (!content) return
-    addFeedbackComment({ feedbackId, fromUserId: user.id, fromUserName: user.name, content })
-    loadFeedbacks()
+    await apiCreateFeedbackComment({ feedbackId, fromUserName: user.name, content })
+    await loadFeedbacks(users.map((u) => u.id))
     setCommentDrafts((prev) => ({ ...prev, [feedbackId]: "" }))
   }
 
@@ -145,6 +158,21 @@ export default function DashboardPage() {
       tasks: scopedTasks.filter((t) => t.userId === u.id),
     }))
     .filter((item) => item.tasks.length > 0)
+
+  useEffect(() => {
+    if (!user) return
+    // tasks 로드 이후, 현재 화면에 표시될 userId 목록 기준으로 피드백 로드
+    const toUserIds = users.map((u) => u.id)
+    void loadFeedbacks(toUserIds)
+  }, [user, users, loadFeedbacks])
+
+  const handleToggleLike = async (taskId: string) => {
+    if (!user) return
+    const res = await apiToggleTaskLike(taskId)
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, likedByMe: res.liked, likesCount: res.likesCount } : t)),
+    )
+  }
 
   if (loading || !user) {
     return (
@@ -391,6 +419,16 @@ export default function DashboardPage() {
                                 {task.category === "other" && "기타"}
                               </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn("h-8 w-8 text-muted-foreground", task.likedByMe && "text-red-500")}
+                              aria-label="좋아요"
+                              onClick={() => void handleToggleLike(task.id)}
+                            >
+                              <Heart className={cn("w-4 h-4", task.likedByMe && "fill-red-500")} />
+                            </Button>
+                            <div className="text-xs text-muted-foreground w-8 text-right">{task.likesCount}</div>
                           </div>
                         ))}
                       </div>
