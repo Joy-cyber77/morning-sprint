@@ -39,6 +39,14 @@ export interface SprintHistory {
   tasksCompleted: number
 }
 
+export interface Todo {
+  id: string
+  userId: string
+  content: string
+  completed: boolean
+  createdAt: string
+}
+
 export interface FeedbackComment {
   id: string
   feedbackId: string
@@ -65,6 +73,7 @@ const POSTS_KEY = "morning_sprint_posts"
 const HISTORY_KEY = "morning_sprint_history"
 const CURRENT_USER_KEY = "morning_sprint_current_user"
 const FEEDBACKS_KEY = "morning_sprint_feedbacks"
+const TODOS_KEY = "morning_sprint_todos"
 
 // Helper functions
 export const getUsers = (): User[] => {
@@ -115,6 +124,16 @@ export const getFeedbacks = (): Feedback[] => {
 
 export const setFeedbacks = (feedbacks: Feedback[]) => {
   localStorage.setItem(FEEDBACKS_KEY, JSON.stringify(feedbacks))
+}
+
+export const getTodos = (): Todo[] => {
+  if (typeof window === "undefined") return []
+  const data = localStorage.getItem(TODOS_KEY)
+  return data ? JSON.parse(data) : []
+}
+
+export const setTodos = (todos: Todo[]) => {
+  localStorage.setItem(TODOS_KEY, JSON.stringify(todos))
 }
 
 const safeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`

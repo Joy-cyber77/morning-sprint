@@ -6,6 +6,7 @@ import "./globals.css"
 import { AuthProvider } from "@/components/auth-provider"
 import { env } from "@/lib/env"
 import { ClerkProvider } from "@clerk/nextjs"
+import { koKR } from "@clerk/localizations"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -43,8 +44,8 @@ export default function RootLayout({
   void env
 
   return (
-    <ClerkProvider>
-      <html lang="en" className="dark">
+    <ClerkProvider localization={koKR}>
+      <html lang="ko" className="dark">
         <body className={`font-sans antialiased`}>
           <AuthProvider>{children}</AuthProvider>
           <Analytics />

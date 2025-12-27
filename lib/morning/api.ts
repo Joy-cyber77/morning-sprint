@@ -31,6 +31,11 @@ export async function apiListTodayTasks(params: { start: string; end: string }):
   return await requestJson<MorningTask[]>(`/api/morning/tasks/today?${q.toString()}`)
 }
 
+export async function apiListTasksInRange(params: { start: string; end: string }): Promise<MorningTask[]> {
+  const q = new URLSearchParams({ start: params.start, end: params.end })
+  return await requestJson<MorningTask[]>(`/api/morning/tasks/range?${q.toString()}`)
+}
+
 export async function apiCreateTask(params: {
   content: string
   category: MorningTaskCategory

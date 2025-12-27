@@ -8,10 +8,11 @@ import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
 import { Trash2, Plus, Share2, Pencil, X, Check, CalendarDays, Sparkles } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { formatKoreanDate } from "@/lib/utils"
+import { formatKoreanDate, isLateMorningTodoCreatedAt } from "@/lib/utils"
 import type { MorningTask, MorningTaskCategory } from "@/lib/morning/types"
 import { apiCreateTask, apiDeleteTask, apiListTodayTasks, apiShareTodayTasks, apiUpdateTask } from "@/lib/morning/api"
 
@@ -243,7 +244,14 @@ export default function TodosPage() {
                         className="mt-0.5"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className={`${task.completed ? "line-through opacity-60" : ""}`}>{task.content}</div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className={`${task.completed ? "line-through opacity-60" : ""}`}>{task.content}</div>
+                          {isLateMorningTodoCreatedAt(task.createdAt) && (
+                            <Badge variant="destructive" className="shrink-0">
+                              지각
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           {task.category === "learning" && "수능"}
                           {task.category === "meditation" && "내신"}

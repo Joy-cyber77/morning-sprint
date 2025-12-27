@@ -1,41 +1,19 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { Header } from "@/components/header"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  type Post,
-  type SprintHistory,
-  type Task,
-  getHistory,
-  getPosts,
-  getTasks,
-  setHistory as setHistoryDB,
-  setPosts,
-  setTasks,
-} from "@/lib/mock-db"
 import { format, startOfDay, subDays } from "date-fns"
-import { Activity, CheckCircle2, Download, Flame, Share2, TrendingUp, Upload } from "lucide-react"
+import { Activity, CheckCircle2, Flame, Share2, TrendingUp } from "lucide-react"
 import { formatKoreanDate, isSameLocalDay } from "@/lib/utils"
-import { parseCsvWithHeaders, stringifyCsv } from "@/lib/csv"
 import { useToast } from "@/hooks/use-toast"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import type { MorningTask } from "@/lib/morning/types"
+import { apiListTasksInRange } from "@/lib/morning/api"
 
 interface DailyStats {
   dateKey: string
@@ -43,9 +21,12 @@ interface DailyStats {
   tasksShared: number
   tasksCompleted: number
   tasksUncompleted: number
+  todosTotal: number
+  todosCompleted: number
+  todosUncompleted: number
 }
 
-const categoryLabels: Record<Task["category"], string> = {
+const categoryLabels: Record<MorningTask["category"], string> = {
   learning: "수능",
   meditation: "내신",
   reading: "비교과(독서)",
@@ -54,277 +35,77 @@ const categoryLabels: Record<Task["category"], string> = {
   other: "기타",
 }
 
-type CategoryFilter = "all" | Task["category"]
+type CategoryFilter = "all" | MorningTask["category"]
 
 export default function HistoryPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
   const { toast } = useToast()
   const [history, setHistory] = useState<DailyStats[]>([])
-  const [userTasks, setUserTasks] = useState<Task[]>([])
+  const [userTasks, setUserTasks] = useState<MorningTask[]>([])
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all")
 
-  type BackupKind = "tasks" | "posts" | "history"
-  type ImportMode = "merge" | "replace"
-
-  const [backupKind, setBackupKind] = useState<BackupKind>("tasks")
-  const [importMode, setImportMode] = useState<ImportMode>("merge")
-  const [mapToCurrentUser, setMapToCurrentUser] = useState(true)
-  const [pendingImport, setPendingImport] = useState<{
-    kind: BackupKind
-    fileName: string
-    count: number
-    items: Array<Task | Post | SprintHistory>
-  } | null>(null)
-  const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false)
-
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login")
-    } else if (user) {
-      calculateHistory()
+      return
     }
   }, [user, loading, router])
 
-  const calculateHistory = () => {
+  const loadHistory = useCallback(async () => {
     if (!user) return
 
-    const allTasks = getTasks().filter((t) => t.userId === user.id)
-    setUserTasks(allTasks)
+    // 최근 7일 (오늘 포함)
+    const start = startOfDay(subDays(new Date(), 6))
+    const end = new Date()
+    end.setHours(23, 59, 59, 999)
 
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const day = startOfDay(subDays(new Date(), i))
-      const dateKey = format(day, "yyyy-MM-dd")
-
-      const tasksSharedOnDate = allTasks.filter((t) => t.isShared && isSameLocalDay(t.createdAt, day)).length
-
-      const tasksCompletedOnDate = allTasks.filter((t) => t.completed && t.completedAt && isSameLocalDay(t.completedAt, day))
-        .length
-
-      const tasksUncompletedOnDate = allTasks.filter((t) => !t.completed && isSameLocalDay(t.createdAt, day)).length
-
-      return {
-        dateKey,
-        day,
-        tasksShared: tasksSharedOnDate,
-        tasksCompleted: tasksCompletedOnDate,
-        tasksUncompleted: tasksUncompletedOnDate,
-      }
-    }).reverse()
-
-    setHistory(last7Days)
-  }
-
-  const downloadTextFile = (filename: string, content: string) => {
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const safeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`
-
-  const parseBoolean = (raw: string) => {
-    const v = raw.trim().toLowerCase()
-    return v === "true" || v === "1" || v === "yes" || v === "y"
-  }
-
-  const parseLikes = (raw: string): string[] => {
-    const v = raw.trim()
-    if (!v) return []
     try {
-      const parsed = JSON.parse(v)
-      if (Array.isArray(parsed)) return parsed.map(String)
-      return []
-    } catch {
-      // Fallback: "a|b|c" or "a;b;c"
-      if (v.includes("|")) return v.split("|").map((s) => s.trim()).filter(Boolean)
-      if (v.includes(";")) return v.split(";").map((s) => s.trim()).filter(Boolean)
-      return [v]
-    }
-  }
+      const tasks = await apiListTasksInRange({ start: start.toISOString(), end: end.toISOString() })
+      setUserTasks(tasks)
 
-  const exportCsv = () => {
-    if (!user) return
+      const last7Days = Array.from({ length: 7 }, (_, i) => {
+        const day = startOfDay(subDays(new Date(), i))
+        const dateKey = format(day, "yyyy-MM-dd")
 
-    if (backupKind === "tasks") {
-      const myTasks = getTasks().filter((t) => t.userId === user.id)
-      const headers = ["id", "userId", "userName", "content", "category", "completed", "isShared", "createdAt", "completedAt", "likes"]
-      const rows = myTasks.map((t) => [
-        t.id,
-        t.userId,
-        t.userName,
-        t.content,
-        t.category,
-        t.completed,
-        t.isShared,
-        t.createdAt,
-        t.completedAt ?? "",
-        JSON.stringify(t.likes ?? []),
-      ])
-      const csv = stringifyCsv(headers, rows)
-      downloadTextFile(`morning-sprint_tasks_${user.id}_${format(new Date(), "yyyyMMdd_HHmm")}.csv`, csv)
-      toast({ title: "내보내기 완료", description: `Tasks ${myTasks.length}개 CSV 다운로드가 시작되었습니다.` })
-      return
-    }
+        const createdOnDay = tasks.filter((t) => isSameLocalDay(t.createdAt, day))
 
-    if (backupKind === "posts") {
-      const myPosts = getPosts().filter((p) => p.userId === user.id)
-      const headers = ["id", "userId", "userName", "content", "category", "createdAt", "likes"]
-      const rows = myPosts.map((p) => [
-        p.id,
-        p.userId,
-        p.userName,
-        p.content,
-        p.category,
-        p.createdAt,
-        JSON.stringify(p.likes ?? []),
-      ])
-      const csv = stringifyCsv(headers, rows)
-      downloadTextFile(`morning-sprint_posts_${user.id}_${format(new Date(), "yyyyMMdd_HHmm")}.csv`, csv)
-      toast({ title: "내보내기 완료", description: `Posts ${myPosts.length}개 CSV 다운로드가 시작되었습니다.` })
-      return
-    }
+        // "Today's Todos" 기준: 그날 생성된 작업이 모두 완료되어야 streak 성공일로 간주
+        const todosTotal = createdOnDay.length
+        const todosCompleted = createdOnDay.filter((t) => t.completed).length
+        const todosUncompleted = createdOnDay.filter((t) => !t.completed).length
 
-    const myHistory = getHistory().filter((h) => h.userId === user.id)
-    const headers = ["id", "userId", "date", "tasksCount", "tasksCompleted"]
-    const rows = myHistory.map((h) => [h.id, h.userId, h.date, h.tasksCount, h.tasksCompleted])
-    const csv = stringifyCsv(headers, rows)
-    downloadTextFile(`morning-sprint_history_${user.id}_${format(new Date(), "yyyyMMdd_HHmm")}.csv`, csv)
-    toast({ title: "내보내기 완료", description: `History ${myHistory.length}개 CSV 다운로드가 시작되었습니다.` })
-  }
+        const tasksSharedOnDate = createdOnDay.filter((t) => t.isShared).length
 
-  const parseImportFile = async (file: File) => {
-    if (!user) return
-    const text = await file.text()
-    const { headers, rows } = parseCsvWithHeaders(text)
+        const tasksCompletedOnDate = tasks.filter((t) => t.completed && t.completedAt && isSameLocalDay(t.completedAt, day)).length
 
-    const requireHeaders = (required: string[]) => {
-      const missing = required.filter((h) => !headers.includes(h))
-      if (missing.length > 0) {
-        throw new Error(`필수 컬럼이 없습니다: ${missing.join(", ")}`)
-      }
-    }
+        const tasksUncompletedOnDate = createdOnDay.filter((t) => !t.completed).length
 
-    if (backupKind === "tasks") {
-      requireHeaders(["content", "category", "completed", "isShared", "createdAt"])
-      const allowedCategories: Task["category"][] = ["learning", "meditation", "reading", "academy", "workout", "other"]
-      const items: Task[] = rows
-        .filter((r) => (r.content ?? "").trim().length > 0)
-        .map((r) => {
-          const categoryRaw = (r.category ?? "other").trim() as Task["category"]
-          const category = allowedCategories.includes(categoryRaw) ? categoryRaw : "other"
-          const completed = parseBoolean(r.completed ?? "false")
-          const isShared = parseBoolean(r.isShared ?? "false")
-          const createdAt = (r.createdAt ?? "").trim() || new Date().toISOString()
-          const completedAt = (r.completedAt ?? "").trim() || undefined
-          const likes = parseLikes(r.likes ?? "")
+        return {
+          dateKey,
+          day,
+          tasksShared: tasksSharedOnDate,
+          tasksCompleted: tasksCompletedOnDate,
+          tasksUncompleted: tasksUncompletedOnDate,
+          todosTotal,
+          todosCompleted,
+          todosUncompleted,
+        }
+      }).reverse()
 
-          const id = (r.id ?? "").trim() || safeId()
-          const userId = mapToCurrentUser ? user.id : ((r.userId ?? "").trim() || user.id)
-          const userName = mapToCurrentUser ? user.name : ((r.userName ?? "").trim() || user.name)
-
-          return {
-            id,
-            userId,
-            userName,
-            content: (r.content ?? "").trim(),
-            category,
-            completed,
-            isShared,
-            createdAt,
-            completedAt: completed ? completedAt : undefined,
-            likes,
-          }
-        })
-
-      setPendingImport({ kind: "tasks", fileName: file.name, count: items.length, items })
-      toast({ title: "가져오기 준비됨", description: `Tasks ${items.length}개를 적용할 준비가 됐습니다.` })
-      return
-    }
-
-    if (backupKind === "posts") {
-      requireHeaders(["content", "category", "createdAt"])
-      const allowedCategories: Post["category"][] = ["reading", "workout", "meditation", "learning", "other"]
-      const items: Post[] = rows
-        .filter((r) => (r.content ?? "").trim().length > 0)
-        .map((r) => {
-          const categoryRaw = (r.category ?? "other").trim() as Post["category"]
-          const category = allowedCategories.includes(categoryRaw) ? categoryRaw : "other"
-          const createdAt = (r.createdAt ?? "").trim() || new Date().toISOString()
-          const likes = parseLikes(r.likes ?? "")
-          const id = (r.id ?? "").trim() || safeId()
-          const userId = mapToCurrentUser ? user.id : ((r.userId ?? "").trim() || user.id)
-          const userName = mapToCurrentUser ? user.name : ((r.userName ?? "").trim() || user.name)
-
-          return { id, userId, userName, content: (r.content ?? "").trim(), category, createdAt, likes }
-        })
-
-      setPendingImport({ kind: "posts", fileName: file.name, count: items.length, items })
-      toast({ title: "가져오기 준비됨", description: `Posts ${items.length}개를 적용할 준비가 됐습니다.` })
-      return
-    }
-
-    requireHeaders(["date", "tasksCount", "tasksCompleted"])
-    const items: SprintHistory[] = rows
-      .filter((r) => (r.date ?? "").trim().length > 0)
-      .map((r) => {
-        const id = (r.id ?? "").trim() || safeId()
-        const userId = mapToCurrentUser ? user.id : ((r.userId ?? "").trim() || user.id)
-        const date = (r.date ?? "").trim()
-        const tasksCount = Number.parseInt((r.tasksCount ?? "0").trim(), 10) || 0
-        const tasksCompleted = Number.parseInt((r.tasksCompleted ?? "0").trim(), 10) || 0
-        return { id, userId, date, tasksCount, tasksCompleted }
+      setHistory(last7Days)
+    } catch (e) {
+      toast({
+        title: "히스토리 로드 실패",
+        description: e instanceof Error ? e.message : "데이터를 불러오는 중 오류가 발생했습니다.",
+        variant: "destructive",
       })
-
-    setPendingImport({ kind: "history", fileName: file.name, count: items.length, items })
-    toast({ title: "가져오기 준비됨", description: `History ${items.length}개를 적용할 준비가 됐습니다.` })
-  }
-
-  const applyImport = () => {
-    if (!user || !pendingImport) return
-    const kind = pendingImport.kind
-    const count = pendingImport.count
-
-    if (kind === "tasks") {
-      const imported = pendingImport.items as Task[]
-      const all = getTasks()
-      const base = importMode === "replace" ? all.filter((t) => t.userId !== user.id) : all
-      const byId = new Map<string, Task>(base.map((t) => [t.id, t]))
-      for (const t of imported) byId.set(t.id, t)
-      setTasks(Array.from(byId.values()))
-      setPendingImport(null)
-      toast({ title: "가져오기 완료", description: `Tasks ${count}개가 ${importMode === "replace" ? "덮어쓰기" : "병합"}로 적용되었습니다.` })
-      calculateHistory()
-      return
+      setUserTasks([])
+      setHistory([])
     }
-
-    if (kind === "posts") {
-      const imported = pendingImport.items as Post[]
-      const all = getPosts()
-      const base = importMode === "replace" ? all.filter((p) => p.userId !== user.id) : all
-      const byId = new Map<string, Post>(base.map((p) => [p.id, p]))
-      for (const p of imported) byId.set(p.id, p)
-      setPosts(Array.from(byId.values()))
-      setPendingImport(null)
-      toast({ title: "가져오기 완료", description: `Posts ${count}개가 ${importMode === "replace" ? "덮어쓰기" : "병합"}로 적용되었습니다.` })
-      return
-    }
-
-    const imported = pendingImport.items as SprintHistory[]
-    const all = getHistory()
-    const base = importMode === "replace" ? all.filter((h) => h.userId !== user.id) : all
-    const byId = new Map<string, SprintHistory>(base.map((h) => [h.id, h]))
-    for (const h of imported) byId.set(h.id, h)
-    setHistoryDB(Array.from(byId.values()))
-    setPendingImport(null)
-    toast({ title: "가져오기 완료", description: `History ${count}개가 ${importMode === "replace" ? "덮어쓰기" : "병합"}로 적용되었습니다.` })
-  }
+  }, [user, toast])
 
   const openDayDialog = (day: Date) => {
     setSelectedDay(day)
@@ -351,18 +132,18 @@ export default function HistoryPage() {
     const sharedOnDay = createdOnDay.filter((t) => t.isShared)
     const uncompletedOnDay = createdOnDay.filter((t) => !t.completed)
 
-    const union = new Map<string, Task>()
+    const union = new Map<string, MorningTask>()
     for (const t of createdOnDay) union.set(t.id, t)
     for (const t of completedOnDay) union.set(t.id, t)
     const allRelated = Array.from(union.values())
 
-    const applyCategoryFilter = (tasks: Task[]) => {
+    const applyCategoryFilter = (tasks: MorningTask[]) => {
       if (categoryFilter === "all") return tasks
       return tasks.filter((t) => t.category === categoryFilter)
     }
 
-    const byCategory = (tasks: Task[]) => {
-      const counts: Record<Task["category"], number> = {
+    const byCategory = (tasks: MorningTask[]) => {
+      const counts: Record<MorningTask["category"], number> = {
         learning: 0,
         meditation: 0,
         reading: 0,
@@ -389,6 +170,10 @@ export default function HistoryPage() {
     }
   }, [selectedDay, userTasks, categoryFilter])
 
+  useEffect(() => {
+    if (!loading && user) void loadHistory()
+  }, [loading, user, loadHistory])
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -403,6 +188,18 @@ export default function HistoryPage() {
   const totalShared = history.reduce((sum, day) => sum + day.tasksShared, 0)
   const totalCompleted = history.reduce((sum, day) => sum + day.tasksCompleted, 0)
   const avgSharedPerDay = (totalShared / 7).toFixed(1)
+
+  // Streak: 오늘부터 거꾸로 "그날 생성된 Todos가 모두 완료된 날"을 연속으로 센 값
+  const streak = (() => {
+    let count = 0
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      const d = history[i]
+      const isSuccessDay = d.todosTotal > 0 && d.todosUncompleted === 0
+      if (!isSuccessDay) break
+      count += 1
+    }
+    return count
+  })()
 
   return (
     <div className="min-h-screen bg-background">
@@ -441,10 +238,10 @@ export default function HistoryPage() {
               <div className="flex items-end gap-2">
                 <Flame className="w-8 h-8 text-orange-500 dark:text-orange-400 animate-flame motion-reduce:animate-none" />
                 <div className="text-3xl font-bold leading-none">
-                  {history.filter((d) => d.tasksShared > 0 || d.tasksCompleted > 0).length}
+                  {streak}
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">Active days</div>
+              <div className="text-xs text-muted-foreground">연속 완료 일수 (오늘의 Todos 전부 완료)</div>
               <div className="text-[11px] leading-snug text-muted-foreground">
                 만약 오늘 하루라도 빼먹으면, 내일 이 숫자는 가차 없이 &apos;0&apos;으로 초기화(Reset) 됩니다.
               </div>
@@ -480,114 +277,6 @@ export default function HistoryPage() {
                   </div>
                 </button>
               ))}
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-xl font-semibold">데이터 백업/복구 (CSV)</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  localStorage 기반 데이터를 CSV로 내보내고, 다른 브라우저/PC에서 다시 가져올 수 있습니다.
-                </p>
-              </div>
-              <Button variant="outline" onClick={exportCsv} className="gap-2 shrink-0">
-                <Download className="w-4 h-4" />
-                내보내기
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">데이터 종류</span>
-                  <Select value={backupKind} onValueChange={(v) => { setBackupKind(v as BackupKind); setPendingImport(null) }}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="tasks">Tasks</SelectItem>
-                      <SelectItem value="posts">Posts</SelectItem>
-                      <SelectItem value="history">SprintHistory</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">가져오기 모드</span>
-                  <Select value={importMode} onValueChange={(v) => setImportMode(v as ImportMode)}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="merge">병합(추천)</SelectItem>
-                      <SelectItem value="replace">덮어쓰기(주의)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Checkbox checked={mapToCurrentUser} onCheckedChange={(v) => setMapToCurrentUser(Boolean(v))} />
-                <div className="text-sm">
-                  <span className="font-medium">현재 로그인 사용자로 매핑</span>
-                  <span className="text-muted-foreground"> (권장: 다른 기기에서 내 데이터가 바로 보이게)</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    try {
-                      await parseImportFile(file)
-                    } catch (err) {
-                      setPendingImport(null)
-                      toast({
-                        title: "가져오기 실패",
-                        description: err instanceof Error ? err.message : "CSV를 읽는 중 오류가 발생했습니다.",
-                      })
-                    } finally {
-                      // allow selecting same file again
-                      e.currentTarget.value = ""
-                    }
-                  }}
-                />
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    className="gap-2"
-                    disabled={!pendingImport || pendingImport.kind !== backupKind || pendingImport.count === 0}
-                    onClick={() => {
-                      if (!pendingImport) return
-                      if (importMode === "replace") setConfirmReplaceOpen(true)
-                      else applyImport()
-                    }}
-                  >
-                    <Upload className="w-4 h-4" />
-                    가져오기 적용
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={!pendingImport}
-                    onClick={() => setPendingImport(null)}
-                  >
-                    초기화
-                  </Button>
-                </div>
-              </div>
-
-              {pendingImport && (
-                <div className="text-sm text-muted-foreground">
-                  준비됨: <span className="font-medium text-foreground">{pendingImport.fileName}</span> •{" "}
-                  {pendingImport.kind} {pendingImport.count}개
-                </div>
-              )}
             </div>
           </Card>
         </div>
@@ -628,7 +317,7 @@ export default function HistoryPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {(Object.keys(categoryLabels) as Task["category"][]).map((cat) => (
+                  {(Object.keys(categoryLabels) as MorningTask["category"][]).map((cat) => (
                     <Badge key={cat} variant="secondary" className="gap-1">
                       <span>{categoryLabels[cat]}</span>
                       <span className="text-muted-foreground">{dayDialogData.categoryCounts[cat]}</span>
@@ -730,30 +419,6 @@ export default function HistoryPage() {
           )}
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={confirmReplaceOpen} onOpenChange={setConfirmReplaceOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>덮어쓰기 적용</AlertDialogTitle>
-            <AlertDialogDescription>
-              선택한 데이터 종류에 대해 <span className="font-medium">현재 사용자</span>의 기존 데이터를 삭제하고,
-              CSV 내용으로 <span className="font-medium">완전히 교체</span>합니다. 계속할까요?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => {
-                setConfirmReplaceOpen(false)
-                applyImport()
-              }}
-            >
-              덮어쓰기
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

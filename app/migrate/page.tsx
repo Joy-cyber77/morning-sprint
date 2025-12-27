@@ -45,13 +45,21 @@ export default function MigratePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tasks, feedbacks }),
       })
-      const json = (await res.json()) as MigrationResult | { error: string }
-      if (!res.ok) throw new Error("error" in json ? json.error : "마이그레이션 실패")
+      const json: unknown = await res.json()
+      if (!res.ok) {
+        const message =
+          typeof json === "object" && json !== null && "error" in json && typeof (json as { error?: unknown }).error === "string"
+            ? (json as { error: string }).error
+            : "마이그레이션 실패"
+        throw new Error(message)
+      }
 
-      setResult(json as MigrationResult)
+      const migrationResult = json as MigrationResult
+
+      setResult(migrationResult)
       toast({
         title: "마이그레이션 완료",
-        description: `tasks ${json.tasks.migrated}개 / feedback ${json.feedbacks.migrated}개`,
+        description: `tasks ${migrationResult.tasks.migrated}개 / feedback ${migrationResult.feedbacks.migrated}개`,
       })
     } catch (e) {
       toast({ title: "마이그레이션 실패", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })

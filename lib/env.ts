@@ -12,6 +12,12 @@ const optionalNonEmptyString = z.preprocess((v) => {
   return trimmed.length === 0 ? undefined : trimmed
 }, z.string().min(1).optional())
 
+const optionalEmail = z.preprocess((v) => {
+  if (typeof v !== "string") return v
+  const trimmed = v.trim()
+  return trimmed.length === 0 ? undefined : trimmed
+}, z.string().email("NEXT_PUBLIC_SUPPORT_EMAIL must be a valid email").optional())
+
 const requiredTrimmedString = (message: string) =>
   z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.string().min(1, message))
 
@@ -31,6 +37,8 @@ const clientEnvSchema = z.object({
 
   NEXT_PUBLIC_ADMIN_EMAILS: optionalNonEmptyString,
 
+  NEXT_PUBLIC_SUPPORT_EMAIL: optionalEmail,
+
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: optionalNonEmptyString,
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: optionalNonEmptyString,
   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: optionalNonEmptyString,
@@ -44,6 +52,7 @@ export const env = (() => {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_ADMIN_EMAILS: process.env.NEXT_PUBLIC_ADMIN_EMAILS,
+    NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
     NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL,

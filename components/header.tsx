@@ -4,18 +4,31 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
 import Link from "next/link"
-import { Home, History, LogOut, Users, CheckSquare } from "lucide-react"
-import { useClerk } from "@clerk/nextjs"
+import { CheckSquare, Home, History, LogOut, Mail, Users } from "lucide-react"
+import { SignInButton, SignUpButton, useClerk } from "@clerk/nextjs"
+import { useRef, useState } from "react"
 
 export function Header() {
   const router = useRouter()
   const { user, refreshUser } = useAuth()
   const clerk = useClerk()
+  const logoutInFlightRef = useRef(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
   const handleLogout = async () => {
-    await clerk.signOut()
-    refreshUser()
-    router.push("/login")
+    // Prevent double-click from triggering sign-out twice and accidentally clicking the next rendered "로그인" button.
+    if (logoutInFlightRef.current) return
+    logoutInFlightRef.current = true
+    setIsSigningOut(true)
+
+    try {
+      await clerk.signOut()
+      refreshUser()
+      router.replace("/dashboard")
+    } finally {
+      setIsSigningOut(false)
+      logoutInFlightRef.current = false
+    }
   }
 
   return (
@@ -58,17 +71,40 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Button variant="ghost" asChild size="sm">
+            <Link href="/contact" aria-label="문의하기">
+              <Mail className="w-4 h-4 mr-2" />
+              문의하기
+            </Link>
+          </Button>
+
           {user ? (
             <>
               <div className="hidden sm:block text-sm text-muted-foreground">{user.name}</div>
-              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out">
-                <LogOut className="w-4 h-4" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                aria-label="로그아웃"
+                disabled={isSigningOut}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                {isSigningOut ? "로그아웃 중..." : "로그아웃"}
               </Button>
             </>
           ) : (
-            <Button variant="default" asChild size="sm">
-              <Link href="/login">Sign in</Link>
-            </Button>
+            <>
+              <SignInButton mode="modal">
+                <Button variant="ghost" size="sm">
+                  로그인
+                </Button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <Button variant="default" size="sm">
+                  회원가입
+                </Button>
+              </SignUpButton>
+            </>
           )}
         </div>
       </div>

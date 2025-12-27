@@ -1,6 +1,7 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Heart, MessageCircle, RefreshCw, Send } from "lucide-react"
-import { cn, isSameLocalDay } from "@/lib/utils"
+import { cn, isLateMorningTodoCreatedAt, isSameLocalDay } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import type { MorningFeedback, MorningTaskCategory, MorningTaskWithLikes } from "@/lib/morning/types"
 import { apiCreateFeedback, apiCreateFeedbackComment, apiListFeedbacks, apiListSharedTasksInRange, apiToggleTaskLike } from "@/lib/morning/api"
@@ -407,8 +408,15 @@ export default function DashboardPage() {
                           >
                             {task.completed && <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />}
                             <div className="flex-1 min-w-0">
-                              <div className={`text-sm ${task.completed ? "line-through opacity-60" : ""}`}>
-                                {task.content}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className={`text-sm ${task.completed ? "line-through opacity-60" : ""}`}>
+                                  {task.content}
+                                </div>
+                                {isLateMorningTodoCreatedAt(task.createdAt) && (
+                                  <Badge variant="destructive" className="shrink-0">
+                                    지각
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 {task.category === "learning" && "수능"}
