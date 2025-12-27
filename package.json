@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "check:env": "node scripts/check-env.mjs",
+    "predev": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\"",
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start"
