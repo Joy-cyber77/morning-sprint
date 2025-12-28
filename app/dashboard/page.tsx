@@ -33,10 +33,19 @@ export default function DashboardPage() {
   // 주간 캘린더 상태
   const [weekAnchorDate, setWeekAnchorDate] = useState<Date>(() => new Date())
   // null이면 주간 전체, Date면 해당 날짜(하루)만 필터링
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
+  // 로그인 직후 첫 화면은 "오늘 기준"으로 보이도록 기본값을 today로 둔다.
+  // (사용자가 원하면 "주간 전체" 버튼으로 언제든지 해제 가능)
+  const [selectedDay, setSelectedDay] = useState<Date | null>(() => new Date())
 
   const pad2 = (n: number) => String(n).padStart(2, "0")
   const toLocalDateKey = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+  const toLocalDayRange = (d: Date) => {
+    const start = new Date(d)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(d)
+    end.setHours(23, 59, 59, 999)
+    return { start, end }
+  }
 
   const getWeekRangeMonToSun = (anchor: Date) => {
     const base = new Date(anchor)
@@ -68,12 +77,14 @@ export default function DashboardPage() {
 
   const loadFeedbacks = useCallback(
     async (toUserIds: string[]) => {
-      const startIso = weekStart.toISOString()
-      const endIso = weekEnd.toISOString()
+      // 피드백은 "해당 날짜" 단위로만 보여주기 (다음 날이 되면 자연스럽게 리셋)
+      const { start, end } = toLocalDayRange(selectedDay ?? new Date())
+      const startIso = start.toISOString()
+      const endIso = end.toISOString()
       const data = await apiListFeedbacks({ toUserIds, start: startIso, end: endIso })
       setFeedbacksState(data)
     },
-    [weekStart, weekEnd],
+    [selectedDay],
   )
 
   useEffect(() => {
