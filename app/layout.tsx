@@ -12,8 +12,8 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Morning Sprint - Start Your Day with Purpose",
-  description: "Join a community of morning achievers. Share your daily progress and stay motivated.",
+  title: "GYFL 유학반 - 자기주도학습 관리",
+  description: "GYFL 유학반 학생들의 자기주도학습 내용 기록과 학습 관리를 위한 서비스입니다.",
   generator: "v0.app",
   icons: {
     icon: [

@@ -48,8 +48,14 @@ export default function TodosPage() {
   const loadTasks = async () => {
     if (!user) return
     const range = getTodayRangeIso()
-    const data = await apiListTodayTasks(range)
-    setTasksState(data)
+    try {
+      const data = await apiListTodayTasks(range)
+      setTasksState(data)
+    } catch (e) {
+      setTasksState([])
+      const message = e instanceof Error ? e.message : "목록을 불러오지 못했습니다."
+      toast({ title: "목록 로드 실패", description: message, variant: "destructive" })
+    }
   }
 
   useEffect(() => {
@@ -139,7 +145,7 @@ export default function TodosPage() {
         <div className="space-y-6">
           <div className="flex flex-col gap-2 mb-6">
             <h1 className="text-4xl font-bold tracking-tight text-balance">
-              좋은 아침입니다, <span className="text-primary">{user.name}</span>님
+              안녕하세요, <span className="text-primary">{user.name}</span>님
             </h1>
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-end gap-3">
@@ -193,11 +199,10 @@ export default function TodosPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="learning">수능</SelectItem>
+                    <SelectItem value="learning">영어공인시험</SelectItem>
+                    <SelectItem value="academy">일본어공인시험</SelectItem>
                     <SelectItem value="meditation">내신</SelectItem>
-                    <SelectItem value="reading">비교과(독서)</SelectItem>
-                    <SelectItem value="academy">학원/과외</SelectItem>
-                    <SelectItem value="workout">운동</SelectItem>
+                    <SelectItem value="reading">독서</SelectItem>
                     <SelectItem value="other">기타</SelectItem>
                   </SelectContent>
                 </Select>
@@ -231,7 +236,7 @@ export default function TodosPage() {
 
               <div className="space-y-2">
                 {tasks.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">오늘의 첫 번째 작업을 추가해보세요!</div>
+                  <div className="text-center py-8 text-muted-foreground">오늘의 첫 번째 학습을 추가해보세요!</div>
                 ) : (
                   tasks.map((task) => (
                     <div
@@ -253,12 +258,11 @@ export default function TodosPage() {
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
-                          {task.category === "learning" && "수능"}
+                          {task.category === "learning" && "영어공인시험"}
+                          {task.category === "academy" && "일본어공인시험"}
                           {task.category === "meditation" && "내신"}
-                          {task.category === "reading" && "비교과(독서)"}
-                          {task.category === "academy" && "학원/과외"}
-                          {task.category === "workout" && "운동"}
-                          {task.category === "other" && "기타"}
+                          {task.category === "reading" && "독서"}
+                          {(task.category === "workout" || task.category === "other") && "기타"}
                         </div>
                       </div>
                       <Button

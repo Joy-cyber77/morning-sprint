@@ -52,12 +52,12 @@ export function CreateTaskDialog({ onTaskCreated }: CreateTaskDialogProps) {
       <DialogTrigger asChild>
         <Button size="lg" className="gap-2">
           <Plus className="w-5 h-5" />
-          Add Morning Task
+          학습 추가
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>오늘의 아침 과업 추가</DialogTitle>
+          <DialogTitle>오늘의 자기주도학습 추가</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -69,11 +69,10 @@ export function CreateTaskDialog({ onTaskCreated }: CreateTaskDialogProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="learning">수능</SelectItem>
+                <SelectItem value="learning">영어공인시험</SelectItem>
+                <SelectItem value="academy">일본어공인시험</SelectItem>
                 <SelectItem value="meditation">내신</SelectItem>
-                <SelectItem value="reading">비교과(독서)</SelectItem>
-                <SelectItem value="academy">학원/과외</SelectItem>
-                <SelectItem value="workout">운동</SelectItem>
+                <SelectItem value="reading">독서</SelectItem>
                 <SelectItem value="other">기타</SelectItem>
               </SelectContent>
             </Select>
@@ -86,7 +85,7 @@ export function CreateTaskDialog({ onTaskCreated }: CreateTaskDialogProps) {
               id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="오늘의 목표를 입력하세요..."
+              placeholder="학습 내용을 입력하세요..."
               rows={4}
               required
             />

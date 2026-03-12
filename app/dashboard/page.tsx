@@ -15,10 +15,12 @@ import { cn, isLateMorningTodoCreatedAt, isSameLocalDay } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import type { MorningFeedback, MorningTaskCategory, MorningTaskWithLikes } from "@/lib/morning/types"
 import { apiCreateFeedback, apiCreateFeedbackComment, apiListFeedbacks, apiListSharedTasksInRange, apiToggleTaskLike } from "@/lib/morning/api"
+import { useToast } from "@/hooks/use-toast"
 
 export default function DashboardPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
+  const { toast } = useToast()
   // 주간(월~일) 범위를 기준으로 로드한 공유 작업 목록
   const [tasks, setTasks] = useState<MorningTaskWithLikes[]>([])
   const [filter, setFilter] = useState<"all" | MorningTaskCategory>("all")
@@ -71,9 +73,15 @@ export default function DashboardPage() {
   const loadTasks = useCallback(async () => {
     const startIso = weekStart.toISOString()
     const endIso = weekEnd.toISOString()
-    const shared = await apiListSharedTasksInRange({ start: startIso, end: endIso })
-    setTasks(shared)
-  }, [weekStart, weekEnd])
+    try {
+      const shared = await apiListSharedTasksInRange({ start: startIso, end: endIso })
+      setTasks(shared)
+    } catch (e) {
+      setTasks([])
+      const message = e instanceof Error ? e.message : "목록을 불러오지 못했습니다."
+      toast({ title: "목록 로드 실패", description: message, variant: "destructive" })
+    }
+  }, [weekStart, weekEnd, toast])
 
   const loadFeedbacks = useCallback(
     async (toUserIds: string[]) => {
@@ -205,9 +213,9 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Learning Mate</h1>
+              <h1 className="text-3xl font-bold tracking-tight">자기주도학습</h1>
               <p className="mt-1 text-white">
-                서로의 든든한 <span className="text-primary">Pacemaker</span>가 되어주세요.
+                유학반 친구들과 함께 <span className="text-primary">학습</span>을 기록하고 관리해보세요.
               </p>
             </div>
             <Button variant="ghost" size="icon" onClick={loadTasks}>
@@ -343,7 +351,14 @@ export default function DashboardPage() {
               size="sm"
               onClick={() => setFilter("learning")}
             >
-              수능
+              영어공인시험
+            </Button>
+            <Button
+              variant={filter === "academy" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("academy")}
+            >
+              일본어공인시험
             </Button>
             <Button
               variant={filter === "meditation" ? "default" : "outline"}
@@ -357,21 +372,7 @@ export default function DashboardPage() {
               size="sm"
               onClick={() => setFilter("reading")}
             >
-              비교과(독서)
-            </Button>
-            <Button
-              variant={filter === "academy" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilter("academy")}
-            >
-              학원/과외
-            </Button>
-            <Button
-              variant={filter === "workout" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilter("workout")}
-            >
-              운동
+              독서
             </Button>
             <Button variant={filter === "other" ? "default" : "outline"} size="sm" onClick={() => setFilter("other")}>
               기타
@@ -387,7 +388,12 @@ export default function DashboardPage() {
               tasksByUser
                 .filter((item) => userFilter === "all" || item.user.id === userFilter)
                 .map((item) => {
-                  const userTasksFiltered = item.tasks.filter((t) => filter === "all" || t.category === filter)
+                  const userTasksFiltered = item.tasks.filter(
+                    (t) =>
+                      filter === "all" ||
+                      t.category === filter ||
+                      (filter === "other" && t.category === "workout"),
+                  )
                   if (userTasksFiltered.length === 0) return null
 
                   const completed = userTasksFiltered.filter((t) => t.completed).length
@@ -430,12 +436,11 @@ export default function DashboardPage() {
                                 )}
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
-                                {task.category === "learning" && "수능"}
+                                {task.category === "learning" && "영어공인시험"}
+                                {task.category === "academy" && "일본어공인시험"}
                                 {task.category === "meditation" && "내신"}
-                                {task.category === "reading" && "비교과(독서)"}
-                                {task.category === "academy" && "학원/과외"}
-                                {task.category === "workout" && "운동"}
-                                {task.category === "other" && "기타"}
+                                {task.category === "reading" && "독서"}
+                                {(task.category === "workout" || task.category === "other") && "기타"}
                               </div>
                             </div>
                             <Button
@@ -545,7 +550,7 @@ export default function DashboardPage() {
             <DialogTitle>{isSelfFeedbackDialog ? "메모 남기기" : "피드백 남기기"}</DialogTitle>
             <DialogDescription>
               {isSelfFeedbackDialog ? (
-                "오늘의 메모/회고를 남겨주세요."
+                "오늘의 학습 메모/회고를 남겨주세요."
               ) : feedbackToUserName ? (
                 <>
                   <span className="font-medium">{feedbackToUserName}</span>님에게 응원/조언을 남겨주세요.

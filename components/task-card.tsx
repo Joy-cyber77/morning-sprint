@@ -20,11 +20,11 @@ const categoryColors = {
 }
 
 const categoryLabels = {
-  learning: "수능",
+  learning: "영어공인시험",
   meditation: "내신",
-  reading: "비교과(독서)",
-  academy: "학원/과외",
-  workout: "운동",
+  reading: "독서",
+  academy: "일본어공인시험",
+  workout: "기타",
   other: "기타",
 }
 

@@ -27,11 +27,11 @@ interface DailyStats {
 }
 
 const categoryLabels: Record<MorningTask["category"], string> = {
-  learning: "수능",
+  learning: "영어공인시험",
   meditation: "내신",
-  reading: "비교과(독서)",
-  academy: "학원/과외",
-  workout: "운동",
+  reading: "독서",
+  academy: "일본어공인시험",
+  workout: "기타",
   other: "기타",
 }
 
@@ -139,7 +139,10 @@ export default function HistoryPage() {
 
     const applyCategoryFilter = (tasks: MorningTask[]) => {
       if (categoryFilter === "all") return tasks
-      return tasks.filter((t) => t.category === categoryFilter)
+      return tasks.filter(
+        (t) =>
+          t.category === categoryFilter || (categoryFilter === "other" && t.category === "workout"),
+      )
     }
 
     const byCategory = (tasks: MorningTask[]) => {
@@ -208,27 +211,27 @@ export default function HistoryPage() {
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="space-y-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Your Sprint History</h1>
-            <p className="text-muted-foreground mt-1">Track your progress over the last 7 days</p>
+            <h1 className="text-3xl font-bold tracking-tight">학습 이력</h1>
+            <p className="text-muted-foreground mt-1">최근 7일간의 자기주도학습 기록을 확인하세요</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card className="p-6 space-y-2">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Activity className="w-4 h-4" />
-                <span className="text-sm font-medium">Tasks Shared</span>
+                <span className="text-sm font-medium">공유한 학습</span>
               </div>
               <div className="text-3xl font-bold">{totalShared}</div>
-              <div className="text-xs text-muted-foreground">{avgSharedPerDay} per day average</div>
+              <div className="text-xs text-muted-foreground">일 평균 {avgSharedPerDay}개</div>
             </Card>
 
             <Card className="p-6 space-y-2">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm font-medium">Tasks Completed</span>
+                <span className="text-sm font-medium">완료한 학습</span>
               </div>
               <div className="text-3xl font-bold">{totalCompleted}</div>
-              <div className="text-xs text-muted-foreground">Last 7 days</div>
+              <div className="text-xs text-muted-foreground">최근 7일</div>
             </Card>
 
             <Card className="p-6 space-y-2">
@@ -241,7 +244,7 @@ export default function HistoryPage() {
                   {streak}
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">연속 완료 일수 (오늘의 Todos 전부 완료)</div>
+              <div className="text-xs text-muted-foreground">연속 완료 일수 (오늘의 학습 전부 완료)</div>
               <div className="text-[11px] leading-snug text-muted-foreground">
                 만약 오늘 하루라도 빼먹으면, 내일 이 숫자는 가차 없이 &apos;0&apos;으로 초기화(Reset) 됩니다.
               </div>
@@ -249,7 +252,7 @@ export default function HistoryPage() {
           </div>
 
           <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Daily Breakdown</h2>
+            <h2 className="text-xl font-semibold mb-4">일별 요약</h2>
             <div className="space-y-3">
               {history.map((day) => (
                 <button
@@ -303,11 +306,10 @@ export default function HistoryPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">전체 카테고리</SelectItem>
-                      <SelectItem value="learning">수능</SelectItem>
+                      <SelectItem value="learning">영어공인시험</SelectItem>
+                      <SelectItem value="academy">일본어공인시험</SelectItem>
                       <SelectItem value="meditation">내신</SelectItem>
-                      <SelectItem value="reading">비교과(독서)</SelectItem>
-                      <SelectItem value="academy">학원/과외</SelectItem>
-                      <SelectItem value="workout">운동</SelectItem>
+                      <SelectItem value="reading">독서</SelectItem>
                       <SelectItem value="other">기타</SelectItem>
                     </SelectContent>
                   </Select>

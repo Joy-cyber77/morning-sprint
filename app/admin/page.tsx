@@ -165,7 +165,7 @@ export default function AdminPage() {
               <div className="text-3xl font-bold">
                 {streakRows.find((r) => r.userId === user.id)?.streak ?? "-"}
               </div>
-              <div className="text-xs text-muted-foreground">오늘의 Todos 전부 완료 기준 (최근 {streakDays}일)</div>
+              <div className="text-xs text-muted-foreground">오늘의 학습 전부 완료 기준 (최근 {streakDays}일)</div>
             </Card>
           </div>
 

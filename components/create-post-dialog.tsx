@@ -50,17 +50,17 @@ export function CreatePostDialog({ onPostCreated }: CreatePostDialogProps) {
       <DialogTrigger asChild>
         <Button size="lg" className="gap-2">
           <Plus className="w-5 h-5" />
-          Share Your Morning
+          방과후 회고 공유
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Share Your Morning Activity</DialogTitle>
+          <DialogTitle>오늘의 학습/회고 공유</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="category" className="text-sm font-medium">
-              Category
+              카테고리
             </label>
             <Select value={category} onValueChange={(value) => setCategory(value as Post["category"])}>
               <SelectTrigger id="category">
@@ -77,23 +77,23 @@ export function CreatePostDialog({ onPostCreated }: CreatePostDialogProps) {
           </div>
           <div className="space-y-2">
             <label htmlFor="content" className="text-sm font-medium">
-              What did you accomplish?
+              오늘 무엇을 했나요?
             </label>
             <Textarea
               id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Share your morning win..."
+              placeholder="오늘의 학습 내용이나 회고를 적어주세요..."
               rows={4}
               required
             />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              취소
             </Button>
             <Button type="submit" disabled={!content.trim()}>
-              Post
+              공유
             </Button>
           </div>
         </form>

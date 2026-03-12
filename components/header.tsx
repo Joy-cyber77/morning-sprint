@@ -36,28 +36,28 @@ export function Header() {
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-lg">MS</span>
+            <span className="text-primary-foreground font-bold text-lg">GYFL</span>
           </div>
-          <span className="font-bold text-xl">Morning Sprint</span>
+          <span className="font-bold text-xl">GYFL 유학반</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
           <Button variant="ghost" asChild size="sm">
             <Link href="/todos">
               <CheckSquare className="w-4 h-4 mr-2" />
-              Today's Todos
+              오늘의 학습
             </Link>
           </Button>
           <Button variant="ghost" asChild size="sm">
             <Link href="/dashboard">
               <Home className="w-4 h-4 mr-2" />
-              Dashboard
+              대시보드
             </Link>
           </Button>
           <Button variant="ghost" asChild size="sm">
             <Link href="/history">
               <History className="w-4 h-4 mr-2" />
-              History
+              학습 이력
             </Link>
           </Button>
           {user?.isAdmin && (

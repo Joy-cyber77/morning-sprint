@@ -9,13 +9,19 @@ async function parseJson<T>(res: Response): Promise<T> {
 }
 
 async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(input, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error"
+    throw new Error(`네트워크 오류: ${msg}. API 연결을 확인해 주세요.`)
+  }
 
   if (!res.ok) {
     const body = await parseJson<ApiErrorShape>(res).catch(() => null)

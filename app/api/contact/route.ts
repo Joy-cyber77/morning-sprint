@@ -49,13 +49,13 @@ export async function POST(req: Request) {
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message ?? "Invalid body")
 
   const supportTo = process.env.SUPPORT_EMAIL_TO ?? "ppagle77@gmail.com"
-  const supportFrom = process.env.SUPPORT_EMAIL_FROM ?? "Morning Sprint <onboarding@resend.dev>"
+  const supportFrom = process.env.SUPPORT_EMAIL_FROM ?? "GYFL 유학반 <onboarding@resend.dev>"
 
   const u = await currentUser().catch(() => null)
   const fromEmail = u?.primaryEmailAddress?.emailAddress ?? ""
   const fromName = u?.fullName ?? u?.username ?? "사용자"
 
-  const subject = `[Morning Sprint 문의] ${parsed.data.subject}`
+  const subject = `[GYFL 유학반 문의] ${parsed.data.subject}`
   const text = [
     `fromName: ${fromName}`,
     `fromEmail: ${fromEmail || "(unknown)"}`,
