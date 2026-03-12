@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Heart, MessageCircle, RefreshCw, Send } from "lucide-react"
-import { cn, isLateMorningTodoCreatedAt, isSameLocalDay } from "@/lib/utils"
+import { cn, formatCreatedTime, isSameLocalDay } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import type { MorningFeedback, MorningTaskCategory, MorningTaskWithLikes } from "@/lib/morning/types"
 import { apiCreateFeedback, apiCreateFeedbackComment, apiListFeedbacks, apiListSharedTasksInRange, apiToggleTaskLike } from "@/lib/morning/api"
@@ -429,11 +429,7 @@ export default function DashboardPage() {
                                 <div className={`text-sm ${task.completed ? "line-through opacity-60" : ""}`}>
                                   {task.content}
                                 </div>
-                                {isLateMorningTodoCreatedAt(task.createdAt) && (
-                                  <Badge variant="destructive" className="shrink-0">
-                                    지각
-                                  </Badge>
-                                )}
+                                <span className="text-xs text-muted-foreground shrink-0">{formatCreatedTime(task.createdAt)}</span>
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 {task.category === "learning" && "영어공인시험"}

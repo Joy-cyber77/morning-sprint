@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Trash2, Plus, Share2, Pencil, X, Check, CalendarDays, Sparkles } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { formatKoreanDate, isLateMorningTodoCreatedAt } from "@/lib/utils"
+import { formatCreatedTime, formatKoreanDate } from "@/lib/utils"
 import type { MorningTask, MorningTaskCategory } from "@/lib/morning/types"
 import { apiCreateTask, apiDeleteTask, apiListTodayTasks, apiShareTodayTasks, apiUpdateTask } from "@/lib/morning/api"
 
@@ -251,11 +251,7 @@ export default function TodosPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className={`${task.completed ? "line-through opacity-60" : ""}`}>{task.content}</div>
-                          {isLateMorningTodoCreatedAt(task.createdAt) && (
-                            <Badge variant="destructive" className="shrink-0">
-                              지각
-                            </Badge>
-                          )}
+                          <span className="text-xs text-muted-foreground shrink-0">{formatCreatedTime(task.createdAt)}</span>
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           {task.category === "learning" && "영어공인시험"}

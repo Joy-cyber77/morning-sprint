@@ -19,41 +19,13 @@ export function formatKoreanDate(day: Date) {
   })
 }
 
-export const KOREA_TIME_ZONE = "Asia/Seoul"
-
-function getTimePartsInTimeZone(date: Date, timeZone: string): { hour: number; minute: number } | null {
-  if (Number.isNaN(date.getTime())) return null
-
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    hour: "2-digit",
+/** 입력(생성) 시각을 한국어 시간 문자열로 (예: 오전 9:30, 오후 2:05) */
+export function formatCreatedTime(isoDateString: string): string {
+  const d = new Date(isoDateString)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleTimeString("ko-KR", {
+    hour: "numeric",
     minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date)
-
-  const hour = Number(parts.find((p) => p.type === "hour")?.value)
-  const minute = Number(parts.find((p) => p.type === "minute")?.value)
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null
-
-  return { hour, minute }
-}
-
-// ISO 시각을 "특정 timezone의 시:분"으로 해석했을 때, cutoff(시:분) '이후'인지 판별
-// 예) cutoff=08:01 이면 08:01부터 true
-export function isAfterTimeInTimeZone(
-  isoDateString: string,
-  timeZone: string,
-  cutoff: { hour: number; minute: number },
-): boolean {
-  const parts = getTimePartsInTimeZone(new Date(isoDateString), timeZone)
-  if (!parts) return false
-
-  const t = parts.hour * 60 + parts.minute
-  const c = cutoff.hour * 60 + cutoff.minute
-  return t >= c
-}
-
-export function isLateMorningTodoCreatedAt(isoDateString: string): boolean {
-  // 한국시간 기준 08:01부터 지각
-  return isAfterTimeInTimeZone(isoDateString, KOREA_TIME_ZONE, { hour: 8, minute: 1 })
+    hour12: true,
+  })
 }

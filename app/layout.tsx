@@ -44,7 +44,13 @@ export default function RootLayout({
   void env
 
   return (
-    <ClerkProvider localization={koKR}>
+    <ClerkProvider
+      localization={koKR}
+      signInUrl={env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/login"}
+      signUpUrl={env.NEXT_PUBLIC_CLERK_SIGN_UP_URL ?? "/signup"}
+      signInFallbackRedirectUrl={env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL ?? "/dashboard"}
+      signUpFallbackRedirectUrl={env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL ?? "/dashboard"}
+    >
       <html lang="ko" className="dark">
         <body className={`font-sans antialiased`}>
           <AuthProvider>{children}</AuthProvider>
