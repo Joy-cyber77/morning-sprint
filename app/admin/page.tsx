@@ -6,7 +6,6 @@ import { useAuth } from "@/components/auth-provider"
 import { Header } from "@/components/header"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { getUsers, getPosts, setPosts, setUsers, type User, type Post } from "@/lib/mock-db"
 import { Users, Activity, Trash2, Shield } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -18,14 +17,35 @@ type AdminStreakRow = {
   streak: number
 }
 
+type AdminUserRow = {
+  id: string
+  name: string
+  email: string | null
+  isAdmin: boolean
+  createdAt?: string | null
+}
+
+type SharedTaskRow = {
+  id: string
+  userId: string
+  userName: string
+  content: string
+  category: string
+  createdAt: string
+  sharedAt?: string
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
-  const [users, setUsersState] = useState<User[]>([])
-  const [posts, setPostsState] = useState<Post[]>([])
+  const [users, setUsersState] = useState<AdminUserRow[]>([])
+  const [recentSharedTasks, setRecentSharedTasks] = useState<SharedTaskRow[]>([])
+  const [totalSharedTasks, setTotalSharedTasks] = useState(0)
   const [streakRows, setStreakRows] = useState<AdminStreakRow[]>([])
   const [streakError, setStreakError] = useState<string | null>(null)
   const [isStreakLoading, setIsStreakLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false)
   const streakDays = 14
 
   useEffect(() => {
@@ -37,6 +57,29 @@ export default function AdminPage() {
       loadData()
     }
   }, [user, loading, router])
+
+  const loadAdminSummary = async () => {
+    setIsSummaryLoading(true)
+    setSummaryError(null)
+    try {
+      const res = await fetch(`/api/admin/summary?recentLimit=10`)
+      const body = (await res.json().catch(() => null)) as any
+      if (!res.ok) {
+        throw new Error(body?.error ?? `Request failed: ${res.status}`)
+      }
+
+      setUsersState((body?.users ?? []) as AdminUserRow[])
+      setTotalSharedTasks(Number(body?.totalSharedTasks ?? 0))
+      setRecentSharedTasks((body?.recentSharedTasks ?? []) as SharedTaskRow[])
+    } catch (e) {
+      setUsersState([])
+      setTotalSharedTasks(0)
+      setRecentSharedTasks([])
+      setSummaryError(e instanceof Error ? e.message : "Admin summary 데이터를 불러오지 못했습니다.")
+    } finally {
+      setIsSummaryLoading(false)
+    }
+  }
 
   const loadAllUserStreaks = async () => {
     setIsStreakLoading(true)
@@ -57,29 +100,12 @@ export default function AdminPage() {
   }
 
   const loadData = () => {
-    setUsersState(getUsers())
-    setPostsState(getPosts())
+    void loadAdminSummary()
     void loadAllUserStreaks()
   }
 
-  const handleDeletePost = (postId: string) => {
-    const filteredPosts = getPosts().filter((p) => p.id !== postId)
-    setPosts(filteredPosts)
-    loadData()
-  }
-
-  const handleDeleteUser = (userId: string) => {
-    if (userId === user?.id) {
-      alert("You cannot delete your own account")
-      return
-    }
-
-    const filteredUsers = getUsers().filter((u) => u.id !== userId)
-    const filteredPosts = getPosts().filter((p) => p.userId !== userId)
-
-    setUsers(filteredUsers)
-    setPosts(filteredPosts)
-    loadData()
+  const handleDeleteUser = (_userId: string) => {
+    alert("현재 Admin 화면에서는 유저 삭제를 지원하지 않습니다. (Clerk/Supabase 연동 후 별도 구현 필요)")
   }
 
   if (loading || !user || !user.isAdmin) {
@@ -119,9 +145,9 @@ export default function AdminPage() {
             <Card className="p-6 space-y-2">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Activity className="w-4 h-4" />
-                <span className="text-sm font-medium">Total Posts</span>
+                <span className="text-sm font-medium">Total Shared Tasks</span>
               </div>
-              <div className="text-3xl font-bold">{posts.length}</div>
+              <div className="text-3xl font-bold">{totalSharedTasks}</div>
             </Card>
 
             <Card className="p-6 space-y-2">
@@ -192,6 +218,7 @@ export default function AdminPage() {
 
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">User Management</h2>
+            {summaryError ? <div className="text-sm text-destructive mb-3">{summaryError}</div> : null}
             <div className="space-y-2">
               {users.map((u) => (
                 <div
@@ -207,9 +234,11 @@ export default function AdminPage() {
                     </div>
                     <div className="text-sm text-muted-foreground">{u.email}</div>
                     <div className="text-xs text-muted-foreground font-mono">ID: {u.id}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Joined {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
-                    </div>
+                    {u.createdAt ? (
+                      <div className="text-xs text-muted-foreground">
+                        Joined {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
+                      </div>
+                    ) : null}
                   </div>
                   {u.id !== user.id && (
                     <Button
@@ -227,36 +256,33 @@ export default function AdminPage() {
           </Card>
 
           <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Recent Posts</h2>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-xl font-semibold">Recent Shared Tasks</h2>
+              <Button variant="outline" onClick={loadAdminSummary} disabled={isSummaryLoading}>
+                {isSummaryLoading ? "로딩 중..." : "새로고침"}
+              </Button>
+            </div>
             <div className="space-y-2">
-              {posts.length === 0 ? (
+              {isSummaryLoading ? (
+                <div className="text-center py-8 text-muted-foreground">불러오는 중...</div>
+              ) : recentSharedTasks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">No posts yet</div>
               ) : (
-                posts.slice(0, 10).map((post) => (
+                recentSharedTasks.map((t) => (
                   <div
-                    key={post.id}
+                    key={t.id}
                     className="flex items-start justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors gap-4"
                   >
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{post.userName}</span>
+                        <span className="font-medium text-sm">{t.userName}</span>
                         <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+                          {formatDistanceToNow(new Date(t.createdAt), { addSuffix: true })}
                         </span>
                       </div>
-                      <p className="text-sm">{post.content}</p>
-                      <div className="text-xs text-muted-foreground">
-                        Category: {post.category} • {post.likes.length} likes
-                      </div>
+                      <p className="text-sm">{t.content}</p>
+                      <div className="text-xs text-muted-foreground">Category: {t.category}</div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeletePost(post.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
                 ))
               )}
